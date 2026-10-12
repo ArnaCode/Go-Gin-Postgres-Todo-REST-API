@@ -238,3 +238,55 @@ func DeleteToDoHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{"message": "Todo deleted successfully"})
 	}
 }
+
+// [EP02 · Nil Map & Typed-Nil Error Traps] ✅ NEW
+
+// fetchCompletionFlags returns the completed flag of every todo owned by
+// userID. It wraps repository.GetTodoCompletionFlags so that handlers
+// receive a plain error, like every other repository call in this file.
+func fetchCompletionFlags(pool *pgxpool.Pool, userID string) ([]bool, error) {
+	return repository.GetTodoCompletionFlags(pool, userID)
+}
+
+// [EP02 · Nil Map & Typed-Nil Error Traps] ✅ NEW
+// 🐞 BUG 2: stats is declared with var instead of make, so writing to it panics.
+
+// GetTodoStatsHandler returns a handler for GET /todos/stats. It responds
+// with the number of completed and pending todos owned by the authenticated
+// user:
+//
+//	{"completed": 1, "pending": 1}
+//
+// The user ID is read from the request context, where AuthMiddleware stores
+// it. If the todos cannot be loaded, the handler responds with 500.
+func GetTodoStatsHandler(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDInterface, exists := c.Get("user_id")
+
+		if !exists {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "user_id not found in context"})
+			return
+		}
+
+		userID := userIDInterface.(string)
+
+		flags, err := fetchCompletionFlags(pool, userID)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load todo statistics"})
+			return
+		}
+
+		var stats map[string]int
+
+		for _, completed := range flags {
+			if completed {
+				stats["completed"]++
+			} else {
+				stats["pending"]++
+			}
+		}
+
+		c.JSON(http.StatusOK, stats)
+	}
+}

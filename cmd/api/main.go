@@ -51,6 +51,8 @@ func main() {
 	{
 		protected.POST("", handlers.CreateTodoHandler(pool))
 		protected.GET("", handlers.GetAllTodosHandler(pool))
+		// [EP02 · Nil Map & Typed-Nil Error Traps] ✅ NEW
+		protected.GET("/stats", handlers.GetTodoStatsHandler(pool))
 		protected.GET("/:id", handlers.GetToDoByIDHandler(pool))
 		protected.PUT("/:id", handlers.UpdateToDoHandler(pool))
 		protected.DELETE("/:id", handlers.DeleteToDoHandler(pool))
