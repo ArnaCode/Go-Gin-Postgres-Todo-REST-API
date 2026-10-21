@@ -23,8 +23,17 @@ type UpdateTodoInput struct {
 	Completed *bool `json:"completed"`
 }
 
-// BUG: this handler writes a response on the repository error path and then
+// [EP01 · Missing Return After c.JSON]
+// 🐞 BUG: this handler writes a response on the repository error path and then
 // continues. c.JSON does not end the handler.
+
+// CreateTodoHandler returns a handler for POST /todos. It creates a todo
+// owned by the authenticated user from the title and completed flag in the
+// request body, and responds with 201 and the created todo.
+//
+// The user ID is read from the request context, where AuthMiddleware stores
+// it. The handler responds with 400 if the body is invalid or has no title,
+// and 500 if the insert fails.
 func CreateTodoHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userIDInterface, exists := c.Get("user_id")
@@ -45,7 +54,7 @@ func CreateTodoHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		todo, err := repository.CreateTodo(pool, input.Title, input.Completed, userID)
 
-		// BUG 4: on an insert failure this sends a 500 and then falls through
+		// 🐞 BUG 4: on an insert failure this sends a 500 and then falls through
 		// to the 201 below with todo == nil, appending "null" to the body.
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -79,8 +88,16 @@ func GetAllTodosHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 	}
 }
 
-// BUG: the catch-all error branch in this handler does not stop execution.
+// [EP01 · Missing Return After c.JSON]
+// 🐞 BUG: the catch-all error branch in this handler does not stop execution.
 // Compare it with the ErrNoRows branch directly above it, which does.
+
+// GetToDoByIDHandler returns a handler for GET /todos/:id. It responds with
+// the authenticated user's todo with the given ID.
+//
+// The user ID is read from the request context, where AuthMiddleware stores
+// it. The handler responds with 400 if the ID is not a number, 404 if the
+// user has no todo with that ID, and 500 if the lookup fails.
 func GetToDoByIDHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userIDInterface, exists := c.Get("user_id")
@@ -111,7 +128,7 @@ func GetToDoByIDHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 				return
 			}
 
-			// BUG 5: any error that is not ErrNoRows sends a 500 here and then
+			// 🐞 BUG 5: any error that is not ErrNoRows sends a 500 here and then
 			// reaches the 200 below with todo == nil.
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			// ✅ NEW CODE
@@ -122,8 +139,19 @@ func GetToDoByIDHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 	}
 }
 
-// BUG: the ID validation branch here rejects the input and then keeps going.
+// [EP01 · Missing Return After c.JSON]
+// 🐞 BUG: the ID validation branch here rejects the input and then keeps going.
 // The same branch in GetToDoByIDHandler stops correctly.
+
+// UpdateToDoHandler returns a handler for PUT /todos/:id. It changes the
+// title, the completed flag, or both, of the authenticated user's todo with
+// the given ID, and responds with the updated todo. A field left out of the
+// request body keeps its current value.
+//
+// The user ID is read from the request context, where AuthMiddleware stores
+// it. The handler responds with 400 if the ID is not a number or the body is
+// invalid or changes nothing, 404 if the user has no todo with that ID, and
+// 500 if the update fails.
 func UpdateToDoHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userIDInterface, exists := c.Get("user_id")
@@ -139,7 +167,7 @@ func UpdateToDoHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		id, err := strconv.Atoi(idStr)
 
-		// BUG 3: a non-numeric ID sends a 400 and then continues with id == 0,
+		// 🐞 BUG 3: a non-numeric ID sends a 400 and then continues with id == 0,
 		// so the body is still bound and a lookup still runs against the
 		// database.
 		if err != nil {
@@ -194,8 +222,17 @@ func UpdateToDoHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 	}
 }
 
-// BUG: two branches in this handler write a response without returning, so a
+// [EP01 · Missing Return After c.JSON]
+// 🐞 BUG: two branches in this handler write a response without returning, so a
 // single request can produce three JSON objects and still run a DELETE query.
+
+// DeleteToDoHandler returns a handler for DELETE /todos/:id. It deletes the
+// authenticated user's todo with the given ID and responds with a
+// confirmation message.
+//
+// The user ID is read from the request context, where AuthMiddleware stores
+// it. The handler responds with 400 if the ID is not a number, 404 if the
+// user has no todo with that ID, and 500 if the deletion fails.
 func DeleteToDoHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userIDInterface, exists := c.Get("user_id")
@@ -211,7 +248,7 @@ func DeleteToDoHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		id, err := strconv.Atoi(idStr)
 
-		// BUG 1: a non-numeric ID sends a 400 and then continues with id == 0,
+		// 🐞 BUG 1: a non-numeric ID sends a 400 and then continues with id == 0,
 		// so the DELETE below executes against the database anyway.
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid todo ID"})
@@ -227,7 +264,7 @@ func DeleteToDoHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 				return
 			}
 
-			// BUG 2: sends a second body and then falls through to the success
+			// 🐞 BUG 2: sends a second body and then falls through to the success
 			// message below, so the response reports a deletion that never
 			// happened.
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
