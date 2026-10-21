@@ -272,12 +272,23 @@ func GetTodoStatsHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 
 		flags, err := fetchCompletionFlags(pool, userID)
 
+		// fmt.Printf("type: %T | value: %v | err == nil: %v\n", err, err, err == nil)
+
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load todo statistics"})
 			return
 		}
 
-		var stats map[string]int
+		// [EP02 · Nil Map & Typed-Nil Error Traps] ✅ NEW
+		// 🐞 BUG 2: stats is declared with var instead of make, so writing to it panics.
+		// 🟣 FIX 2: stats is created with make, and both keys start at 0.
+
+		// 🟣 UPDATED — make creates the map's storage
+		stats := make(map[string]int)
+
+		// ✅ NEW — both keys always present
+		stats["completed"] = 0
+		stats["pending"] = 0
 
 		for _, completed := range flags {
 			if completed {

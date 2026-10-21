@@ -209,7 +209,10 @@ func DeleteToDo(pool *pgxpool.Pool, id int, userID string) error {
 // The query is cancelled if it takes longer than five seconds. On failure,
 // GetTodoCompletionFlags returns a nil slice and an *AppError whose Code
 // names the step that failed: "QUERY_FAILED", "SCAN_FAILED" or "ROWS_FAILED".
-func GetTodoCompletionFlags(pool *pgxpool.Pool, userID string) ([]bool, *AppError) {
+
+// 🐞 BUG 1: the second return type is *AppError instead of error.
+// 🟣 FIX 1: the second return type is now error.
+func GetTodoCompletionFlags(pool *pgxpool.Pool, userID string) ([]bool, error) {
 	var ctx context.Context
 	var cancel context.CancelFunc
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
