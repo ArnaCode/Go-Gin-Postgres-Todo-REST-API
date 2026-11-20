@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"todo_api/internal/models"
 	"todo_api/internal/repository"
 
 	"github.com/gin-gonic/gin"
@@ -219,26 +220,10 @@ func DeleteToDoHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 	}
 }
 
-// [EP02 · Nil Map & Typed-Nil Error Traps] ✅ NEW
-
-// fetchCompletionFlags returns the completed flag of every todo owned by
-// userID. It wraps repository.GetTodoCompletionFlags so that handlers
-// receive a plain error, like every other repository call in this file.
 func fetchCompletionFlags(pool *pgxpool.Pool, userID string) ([]bool, error) {
 	return repository.GetTodoCompletionFlags(pool, userID)
 }
 
-// [EP02 · Nil Map & Typed-Nil Error Traps] ✅ NEW
-// 🐞 BUG 2: stats is declared with var instead of make, so writing to it panics.
-
-// GetTodoStatsHandler returns a handler for GET /todos/stats. It responds
-// with the number of completed and pending todos owned by the authenticated
-// user:
-//
-//	{"completed": 1, "pending": 1}
-//
-// The user ID is read from the request context, where AuthMiddleware stores
-// it. If the todos cannot be loaded, the handler responds with 500.
 func GetTodoStatsHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userIDInterface, exists := c.Get("user_id")
@@ -259,14 +244,8 @@ func GetTodoStatsHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		// [EP02 · Nil Map & Typed-Nil Error Traps] ✅ NEW
-		// 🐞 BUG 2: stats is declared with var instead of make, so writing to it panics.
-		// 🟣 FIX 2: stats is created with make, and both keys start at 0.
-
-		// 🟣 UPDATED — make creates the map's storage
 		stats := make(map[string]int)
 
-		// ✅ NEW — both keys always present
 		stats["completed"] = 0
 		stats["pending"] = 0
 
@@ -279,5 +258,61 @@ func GetTodoStatsHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, stats)
+	}
+}
+
+// [EP03 · Slice Aliasing & the Append Bug] ✅ NEW
+// 🐞 BUG: result is built on todos[:0], so it shares the backing array of
+// todos, and every append overwrites the caller's todos.
+
+// filterTodos returns the todos in todos whose Completed field equals
+// completed, in their original order.
+func filterTodos(todos []models.Todo, completed bool) []models.Todo {
+	result := todos[:0]
+
+	for _, todo := range todos {
+		if todo.Completed == completed {
+			result = append(result, todo)
+		}
+	}
+
+	return result
+}
+
+// [EP03 · Slice Aliasing & the Append Bug] ✅ NEW
+
+// GetGroupedTodosHandler returns a handler for GET /todos/grouped. It
+// responds with the authenticated user's todos split into two lists, each
+// newest first:
+//
+//	{"completed": [...], "pending": [...]}
+//
+// The user ID is read from the request context, where AuthMiddleware stores
+// it. If the todos cannot be loaded, the handler responds with 500.
+func GetGroupedTodosHandler(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDInterface, exists := c.Get("user_id")
+
+		if !exists {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "user_id not found in context"})
+			return
+		}
+
+		userID := userIDInterface.(string)
+
+		todos, err := repository.GetAllTodos(pool, userID)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load todos"})
+			return
+		}
+
+		completed := filterTodos(todos, true)
+		pending := filterTodos(todos, false)
+
+		c.JSON(http.StatusOK, gin.H{
+			"completed": completed,
+			"pending":   pending,
+		})
 	}
 }
