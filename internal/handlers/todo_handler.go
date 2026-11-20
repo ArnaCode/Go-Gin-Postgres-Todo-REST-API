@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"todo_api/internal/models"
@@ -268,7 +269,15 @@ func GetTodoStatsHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 // filterTodos returns the todos in todos whose Completed field equals
 // completed, in their original order.
 func filterTodos(todos []models.Todo, completed bool) []models.Todo {
-	result := todos[:0]
+	// Backing Array => Go Server's Memory (RAM)
+
+	// Slice AKA Slice Header => 3 things, 1- pointer, 2- Length, 3- Capacity
+	// Pointer => Starting point of the backing array == Slot 0
+	// Length => the length of the backing array == 6
+	// Capacity => how many item can this backing array hold >= length
+	// result := todos[:0]
+
+	result := make([]models.Todo, 0, len(todos))
 
 	for _, todo := range todos {
 		if todo.Completed == completed {
@@ -307,8 +316,42 @@ func GetGroupedTodosHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
+		// completed := filterTodos(todos, true)
+		// pending := filterTodos(todos, false)
+
+		show := func(step string, name string, list []models.Todo) {
+			ids := []int{}
+			for _, todo := range list {
+				ids = append(ids, todo.ID)
+			}
+			fmt.Printf("%-24s %-9s len=%d cap=%d slot0=%p ids=%v\n", step, name, len(list), cap(list), &list[0], ids)
+		}
+
+		show("before filtering", "todos", todos)
+		//  Origianl Backing array         Slots 0 1 2 3 4 5
+		//  Origianl todos =>               ids=[6 5 4 3 2 1]
+		// completed == true =>             ids=[5 4 3 1]
+		//  Manipulated todos (true) =>     ids=[5 4 3 1 2 1]
 		completed := filterTodos(todos, true)
+
+		show("after filterTodos(true)", "todos", todos)
+		show("after filterTodos(true)", "completed", completed)
+
+		//  Origianl Backing array         Slots 0 1 2 3 4 5
+		//  Origianl todos =>               ids=[6 5 4 3 2 1]
+		// completed == true =>             ids=[5 4 3 1]
+		//  Manipulated todos (true) =>     ids=[5 4 3 1 2 1]
+
+		// pending == false =>             ids=[2]
+		//  Origianl Backing array        Slots 0 1 2 3 4 5
+		//  Manipulated todos (false) =>   ids=[2 4 3 1 2 1]
+		// completed == true =>            ids=[2 4 3 1]
+
 		pending := filterTodos(todos, false)
+
+		show("after filterTodos(false)", "todos", todos)
+		show("after filterTodos(false)", "completed", completed)
+		show("after filterTodos(false)", "pending", pending)
 
 		c.JSON(http.StatusOK, gin.H{
 			"completed": completed,
